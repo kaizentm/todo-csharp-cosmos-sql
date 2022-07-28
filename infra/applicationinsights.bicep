@@ -6,8 +6,8 @@ param workspaceId string
 resource applicationInsights 'Microsoft.Insights/components@2020-02-02' = {
   name: 'appi-${resourceToken}'
   location: location
-  tags: tags
   kind: 'web'
+  tags: tags
   properties: {
     Application_Type: 'web'
     WorkspaceResourceId: workspaceId
@@ -18,7 +18,6 @@ resource applicationInsights 'Microsoft.Insights/components@2020-02-02' = {
 resource applicationInsightsDashboard 'Microsoft.Portal/dashboards@2020-09-01-preview' = {
   name: 'appid-${resourceToken}'
   location: location
-  tags: tags
   properties: {
     lenses: [
       {

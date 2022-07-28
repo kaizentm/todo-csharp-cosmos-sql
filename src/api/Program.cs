@@ -1,25 +1,23 @@
+using Azure.Identity;
 using Microsoft.ApplicationInsights.AspNetCore.Extensions;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.Azure.Cosmos;
 using SimpleTodo.Api;
 
+var credential = new DefaultAzureCredential();
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddScoped<ListsRepository>();
-builder.Services.AddDbContext<TodoDb>(options =>
+builder.Services.AddSingleton<ListsRepository>();
+builder.Services.AddSingleton(_ => new CosmosClient(builder.Configuration["AZURE_COSMOS_ENDPOINT"], credential, new CosmosClientOptions()
 {
-    options.UseSqlServer(builder.Configuration["AZURE_SQL_CONNECTION_STRING"], sqlOptions => sqlOptions.EnableRetryOnFailure());
-});
-
+    SerializerOptions = new CosmosSerializationOptions
+    {
+        PropertyNamingPolicy = CosmosPropertyNamingPolicy.CamelCase
+    }
+}));
 builder.Services.AddControllers();
 builder.Services.AddApplicationInsightsTelemetry(builder.Configuration);
 
 var app = builder.Build();
-
-await using (var scope = app.Services.CreateAsyncScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<TodoDb>();
-    await db.Database.EnsureCreatedAsync();
-}
 
 app.UseCors(policy =>
 {

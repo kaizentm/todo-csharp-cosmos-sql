@@ -1,84 +1,90 @@
-using Microsoft.EntityFrameworkCore;
+using Microsoft.Azure.Cosmos;
+using Microsoft.Azure.Cosmos.Linq;
 
 namespace SimpleTodo.Api;
 
 public class ListsRepository
 {
-    private readonly TodoDb _db;
+    private readonly Container _listsCollection;
+    private readonly Container _itemsCollection;
 
-    public ListsRepository(TodoDb db)
+    public ListsRepository(CosmosClient client, IConfiguration configuration)
     {
-        _db = db;
+        var database = client.GetDatabase(configuration["AZURE_COSMOS_DATABASE_NAME"]);
+        _listsCollection = database.GetContainer("TodoList");
+        _itemsCollection = database.GetContainer("TodoItem");
     }
 
     public async Task<IEnumerable<TodoList>> GetListsAsync(int? skip, int? batchSize)
     {
-        return await ToListAsync(_db.Lists, skip, batchSize);
-    }
-
-    public async Task<TodoList?> GetListAsync(Guid listId)
-    {
-        return await _db.Lists.SingleOrDefaultAsync(list => list.Id == listId);
-    }
-
-    public async Task DeleteListAsync(Guid listId)
-    {
-        var list = await GetListAsync(listId);
-        if (list != null)
-        {
-            _db.Lists.Remove(list);
-        }
-
-        await _db.SaveChangesAsync();
-    }
-
-    public async Task AddListAsync(TodoList list)
-    {
-        _db.Lists.Add(list);
-        await _db.SaveChangesAsync();
-    }
-
-    public async Task SaveChangesAsync()
-    {
-        await _db.SaveChangesAsync();
-    }
-
-    public async Task<IEnumerable<TodoItem>> GetListItemsAsync(Guid listId, int? skip, int? batchSize)
-    {
         return await ToListAsync(
-            _db.Items.Where(i => i.ListId == listId),
+            _listsCollection.GetItemLinqQueryable<TodoList>(),
             skip,
             batchSize);
     }
 
-    public async Task<IEnumerable<TodoItem>> GetListItemsByStateAsync(Guid listId, string state, int? skip, int? batchSize)
+    public async Task<TodoList?> GetListAsync(string listId)
+    {
+        var response = await _listsCollection.ReadItemAsync<TodoList>(listId, new PartitionKey(listId));
+        return response?.Resource;
+    }
+
+    public async Task DeleteListAsync(string listId)
+    {
+        await _listsCollection.DeleteItemAsync<TodoList>(listId, new PartitionKey(listId));
+    }
+
+    public async Task AddListAsync(TodoList list)
+    {
+        list.Id = Guid.NewGuid().ToString("N");
+        await _listsCollection.UpsertItemAsync(list, new PartitionKey(list.Id));
+    }
+
+    public async Task UpdateList(TodoList existingList)
+    {
+        await _listsCollection.ReplaceItemAsync(existingList, existingList.Id, new PartitionKey(existingList.Id));
+    }
+
+    public async Task<IEnumerable<TodoItem>> GetListItemsAsync(string listId, int? skip, int? batchSize)
     {
         return await ToListAsync(
-            _db.Items.Where(i => i.ListId == listId && i.State == state),
+            _itemsCollection.GetItemLinqQueryable<TodoItem>().Where(i => i.ListId == listId),
+            skip,
+            batchSize);
+    }
+
+    public async Task<IEnumerable<TodoItem>> GetListItemsByStateAsync(string listId, string state, int? skip, int? batchSize)
+    {
+        return await ToListAsync(
+            _itemsCollection.GetItemLinqQueryable<TodoItem>().Where(i => i.ListId == listId && i.State == state),
             skip,
             batchSize);
     }
 
     public async Task AddListItemAsync(TodoItem item)
     {
-        _db.Items.Add(item);
-        await _db.SaveChangesAsync();
+        item.Id = Guid.NewGuid().ToString("N");
+        await _itemsCollection.UpsertItemAsync(item, new PartitionKey(item.Id));
     }
 
-    public async Task<TodoItem?> GetListItemAsync(Guid listId, Guid itemId)
+    public async Task<TodoItem?> GetListItemAsync(string listId, string itemId)
     {
-        return await _db.Items.SingleOrDefaultAsync(item => item.Id == itemId && item.ListId == listId);
-    }
-
-    public async Task DeleteListItemAsync(Guid listId, Guid itemId)
-    {
-        var list = await GetListItemAsync(listId, itemId);
-        if (list != null)
+        var response = await _itemsCollection.ReadItemAsync<TodoItem>(itemId, new PartitionKey(itemId));
+        if (response?.Resource.ListId != listId)
         {
-            _db.Items.Remove(list);
+            return null;
         }
+        return response.Resource;
+    }
 
-        await _db.SaveChangesAsync();
+    public async Task DeleteListItemAsync(string listId, string itemId)
+    {
+        await _itemsCollection.DeleteItemAsync<TodoItem>(itemId, new PartitionKey(itemId));
+    }
+
+    public async Task UpdateListItem(TodoItem existingItem)
+    {
+        await _itemsCollection.ReplaceItemAsync(existingItem, existingItem.Id, new PartitionKey(existingItem.Id));
     }
 
     private async Task<List<T>> ToListAsync<T>(IQueryable<T> queryable, int? skip, int? batchSize)
@@ -93,7 +99,17 @@ public class ListsRepository
             queryable = queryable.Take(batchSize.Value);
         }
 
+        using FeedIterator<T> iterator = queryable.ToFeedIterator();
+        var items = new List<T>();
 
-        return await queryable.ToListAsync();
+        while (iterator.HasMoreResults)
+        {
+            foreach (var item in await iterator.ReadNextAsync())
+            {
+                items.Add(item);
+            }
+        }
+
+        return items;
     }
 }
