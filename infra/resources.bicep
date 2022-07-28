@@ -1,5 +1,4 @@
 param location string
-param principalId string = ''
 param resourceToken string
 param tags object
 
@@ -51,7 +50,7 @@ resource web 'Microsoft.Web/sites@2021-03-01' = {
   }
 }
 
-resource api 'Microsoft.Web/sites@2021-01-15' = {
+resource api 'Microsoft.Web/sites@2021-03-01' = {
   name: 'app-api-${resourceToken}'
   location: location
   tags: union(tags, {
@@ -74,8 +73,7 @@ resource api 'Microsoft.Web/sites@2021-01-15' = {
   resource appSettings 'config' = {
     name: 'appsettings'
     properties: {
-      'AZURE_COSMOS_ENDPOINT': cosmos.properties.documentEndpoint
-      'AZURE_COSMOS_DATABASE_NAME': cosmos::database.name
+      'AZURE_SQL_CONNECTION_STRING': AZURE_SQL_CONNECTION_STRING
       'APPLICATIONINSIGHTS_CONNECTION_STRING': applicationInsightsResources.outputs.APPLICATIONINSIGHTS_CONNECTION_STRING
     }
   }
@@ -139,106 +137,44 @@ module applicationInsightsResources './applicationinsights.bicep' = {
   }
 }
 
-resource cosmos 'Microsoft.DocumentDB/databaseAccounts@2021-10-15' = {
-  name: 'cosmos-${resourceToken}'
+// 2021-11-01-preview because that is latest valid version
+resource sqlServer 'Microsoft.Sql/servers@2021-11-01-preview' = {
+  name: 'sql-${resourceToken}'
   location: location
   tags: tags
   properties: {
-    locations: [
-      {
-        locationName: location
-        failoverPriority: 0
-        isZoneRedundant: false
-      }
-    ]
-    databaseAccountOfferType: 'Standard'
-  }
-
-  resource database 'sqlDatabases' = {
-    name: 'Todo'
-    properties: {
-      resource: {
-        id: 'Todo'
-      }
-    }
-
-    resource list 'containers' = {
-      name: 'TodoList'
-      properties: {
-        resource: {
-          id: 'TodoList'
-          partitionKey: {
-            paths: [
-              '/id'
-            ]
-          }
-        }
-        options: {}
-      }
-    }
-
-    resource item 'containers' = {
-      name: 'TodoItem'
-      properties: {
-        resource: {
-          id: 'TodoItem'
-          partitionKey: {
-            paths: [
-              '/id'
-            ]
-          }
-        }
-        options: {}
-      }
+    version: '12.0'
+    minimalTlsVersion: '1.2'
+    publicNetworkAccess: 'Enabled'
+    administrators: {
+      administratorType: 'ActiveDirectory'
+      principalType: 'User'
+      sid: api.identity.principalId
+      login: 'activedirectoryadmin'
+      tenantId: api.identity.tenantId
+      azureADOnlyAuthentication: true
     }
   }
 
-  resource roleDefinition 'sqlroleDefinitions' = {
-    name: guid(cosmos.id, resourceToken, 'sql-role')
-    properties: {
-      assignableScopes: [
-        cosmos.id
-      ]
-      permissions: [
-        {
-          dataActions: [
-            'Microsoft.DocumentDB/databaseAccounts/readMetadata'
-            'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers/items/*'
-            'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers/*'
-          ]
-          notDataActions: []
-        }
-      ]
-      roleName: 'Reader Writer'
-      type: 'CustomRole'
-    }
+  resource database 'databases' = {
+    name: 'ToDo'
+    location: location
   }
 
-  resource userRole 'sqlRoleAssignments' = if (!empty(principalId)) {
-    name: guid(roleDefinition.id, principalId, cosmos.id)
+  resource firewall 'firewallRules' = {
+    name: 'Azure Services'
     properties: {
-      principalId: principalId
-      roleDefinitionId: roleDefinition.id
-      scope: cosmos.id
+      startIpAddress: '0.0.0.0'
+      endIpAddress: '0.0.0.0'
     }
-  }
-
-  resource appRole 'sqlRoleAssignments' = {
-    name: guid(roleDefinition.id, api.id, cosmos.id)
-    properties: {
-      principalId: api.identity.principalId
-      roleDefinitionId: roleDefinition.id
-      scope: cosmos.id
-    }
-
-    dependsOn: [
-      userRole
-    ]
   }
 }
 
-output AZURE_COSMOS_ENDPOINT string = cosmos.properties.documentEndpoint
-output AZURE_COSMOS_DATABASE_NAME string = cosmos::database.name
+// Defined as a var here because it is used above
+
+var AZURE_SQL_CONNECTION_STRING = 'Server=${sqlServer.properties.fullyQualifiedDomainName}; Authentication=Active Directory Default; Database=${sqlServer::database.name};'
+
+output AZURE_SQL_CONNECTION_STRING string = AZURE_SQL_CONNECTION_STRING
 output APPLICATIONINSIGHTS_CONNECTION_STRING string = applicationInsightsResources.outputs.APPLICATIONINSIGHTS_CONNECTION_STRING
 output WEB_URI string = 'https://${web.properties.defaultHostName}'
 output API_URI string = 'https://${api.properties.defaultHostName}'

@@ -37,7 +37,7 @@ public class ListsController : ControllerBase
     [HttpGet("{list_id}")]
     [ProducesResponseType(200)]
     [ProducesResponseType(404)]
-    public async Task<ActionResult<IEnumerable<TodoList>>> GetList(string list_id)
+    public async Task<ActionResult<IEnumerable<TodoList>>> GetList(Guid list_id)
     {
         var list = await _repository.GetListAsync(list_id);
 
@@ -46,7 +46,7 @@ public class ListsController : ControllerBase
 
     [HttpPut("{list_id}")]
     [ProducesResponseType(200)]
-    public async Task<ActionResult<TodoList>> UpdateList(string list_id, [FromBody]CreateUpdateTodoList list)
+    public async Task<ActionResult<TodoList>> UpdateList(Guid list_id, [FromBody]CreateUpdateTodoList list)
     {
         var existingList = await _repository.GetListAsync(list_id);
         if (existingList == null)
@@ -58,7 +58,7 @@ public class ListsController : ControllerBase
         existingList.Description = list.description;
         existingList.UpdatedDate = DateTimeOffset.UtcNow;
 
-        await _repository.UpdateList(existingList);
+        await _repository.SaveChangesAsync();
 
         return Ok(existingList);
     }
@@ -66,7 +66,7 @@ public class ListsController : ControllerBase
     [HttpDelete("{list_id}")]
     [ProducesResponseType(204)]
     [ProducesResponseType(404)]
-    public async Task<ActionResult> DeleteList(string list_id)
+    public async Task<ActionResult> DeleteList(Guid list_id)
     {
         if (await _repository.GetListAsync(list_id) == null)
         {
@@ -81,7 +81,7 @@ public class ListsController : ControllerBase
     [HttpGet("{list_id}/items")]
     [ProducesResponseType(200)]
     [ProducesResponseType(404)]
-    public async Task<ActionResult<IEnumerable<TodoItem>>> GetListItems(string list_id, [FromQuery] int? skip = null, [FromQuery] int? batchSize = null)
+    public async Task<ActionResult<IEnumerable<TodoItem>>> GetListItems(Guid list_id, [FromQuery] int? skip = null, [FromQuery] int? batchSize = null)
     {
         if (await _repository.GetListAsync(list_id) == null)
         {
@@ -93,7 +93,7 @@ public class ListsController : ControllerBase
     [HttpPost("{list_id}/items")]
     [ProducesResponseType(201)]
     [ProducesResponseType(404)]
-    public async Task<ActionResult<TodoItem>> CreateListItem(string list_id, [FromBody] CreateUpdateTodoItem item)
+    public async Task<ActionResult<TodoItem>> CreateListItem(Guid list_id, [FromBody] CreateUpdateTodoItem item)
     {
         if (await _repository.GetListAsync(list_id) == null)
         {
@@ -116,7 +116,7 @@ public class ListsController : ControllerBase
     [HttpGet("{list_id}/items/{item_id}")]
     [ProducesResponseType(200)]
     [ProducesResponseType(404)]
-    public async Task<ActionResult<TodoItem>> GetListItem(string list_id, string item_id)
+    public async Task<ActionResult<TodoItem>> GetListItem(Guid list_id, Guid item_id)
     {
         if (await _repository.GetListAsync(list_id) == null)
         {
@@ -131,7 +131,7 @@ public class ListsController : ControllerBase
     [HttpPut("{list_id}/items/{item_id}")]
     [ProducesResponseType(200)]
     [ProducesResponseType(404)]
-    public async Task<ActionResult<TodoItem>> UpdateListItem(string list_id, string item_id, [FromBody] CreateUpdateTodoItem item)
+    public async Task<ActionResult<TodoItem>> UpdateListItem(Guid list_id, Guid item_id, [FromBody] CreateUpdateTodoItem item)
     {
         var existingItem = await _repository.GetListItemAsync(list_id, item_id);
         if (existingItem == null)
@@ -146,7 +146,7 @@ public class ListsController : ControllerBase
         existingItem.State = item.state;
         existingItem.UpdatedDate = DateTimeOffset.UtcNow;
 
-        await _repository.UpdateListItem(existingItem);
+        await _repository.SaveChangesAsync();
 
         return Ok(existingItem);
     }
@@ -154,7 +154,7 @@ public class ListsController : ControllerBase
     [HttpDelete("{list_id}/items/{item_id}")]
     [ProducesResponseType(204)]
     [ProducesResponseType(404)]
-    public async Task<ActionResult> DeleteListItem(string list_id, string item_id)
+    public async Task<ActionResult> DeleteListItem(Guid list_id, Guid item_id)
     {
         if (await _repository.GetListItemAsync(list_id, item_id) == null)
         {
@@ -169,7 +169,7 @@ public class ListsController : ControllerBase
     [HttpGet("{list_id}/state/{state}")]
     [ProducesResponseType(200)]
     [ProducesResponseType(404)]
-    public async Task<ActionResult<IEnumerable<TodoItem>>> GetListItemsByState(string list_id, string state, [FromQuery] int? skip = null, [FromQuery] int? batchSize = null)
+    public async Task<ActionResult<IEnumerable<TodoItem>>> GetListItemsByState(Guid list_id, string state, [FromQuery] int? skip = null, [FromQuery] int? batchSize = null)
     {
         if (await _repository.GetListAsync(list_id) == null)
         {
