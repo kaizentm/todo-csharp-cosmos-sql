@@ -3,12 +3,12 @@ param principalId string = ''
 param resourceToken string
 param tags object
 
-var abbrs = loadJsonContent('abbreviations.json')
-
 resource web 'Microsoft.Web/sites@2021-03-01' = {
-  name: '${abbrs.webSitesAppService}web-${resourceToken}'
+  name: 'app-web-${resourceToken}'
   location: location
-  tags: union(tags, { 'azd-service-name': 'web' })
+  tags: union(tags, {
+      'azd-service-name': 'web'
+    })
   properties: {
     serverFarmId: appServicePlan.id
     siteConfig: {
@@ -21,8 +21,8 @@ resource web 'Microsoft.Web/sites@2021-03-01' = {
   resource appSettings 'config' = {
     name: 'appsettings'
     properties: {
-      SCM_DO_BUILD_DURING_DEPLOYMENT: 'false'
-      APPLICATIONINSIGHTS_CONNECTION_STRING: applicationInsightsResources.outputs.APPLICATIONINSIGHTS_CONNECTION_STRING
+      'SCM_DO_BUILD_DURING_DEPLOYMENT': 'false'
+      'APPLICATIONINSIGHTS_CONNECTION_STRING': applicationInsightsResources.outputs.APPLICATIONINSIGHTS_CONNECTION_STRING
     }
   }
 
@@ -52,9 +52,11 @@ resource web 'Microsoft.Web/sites@2021-03-01' = {
 }
 
 resource api 'Microsoft.Web/sites@2021-01-15' = {
-  name: '${abbrs.webSitesAppService}api-${resourceToken}'
+  name: 'app-api-${resourceToken}'
   location: location
-  tags: union(tags, { 'azd-service-name': 'api' })
+  tags: union(tags, {
+      'azd-service-name': 'api'
+    })
   kind: 'app,linux'
   properties: {
     serverFarmId: appServicePlan.id
@@ -72,9 +74,9 @@ resource api 'Microsoft.Web/sites@2021-01-15' = {
   resource appSettings 'config' = {
     name: 'appsettings'
     properties: {
-      AZURE_COSMOS_ENDPOINT: cosmos.properties.documentEndpoint
-      AZURE_COSMOS_DATABASE_NAME: cosmos::database.name
-      APPLICATIONINSIGHTS_CONNECTION_STRING: applicationInsightsResources.outputs.APPLICATIONINSIGHTS_CONNECTION_STRING
+      'AZURE_COSMOS_ENDPOINT': cosmos.properties.documentEndpoint
+      'AZURE_COSMOS_DATABASE_NAME': cosmos::database.name
+      'APPLICATIONINSIGHTS_CONNECTION_STRING': applicationInsightsResources.outputs.APPLICATIONINSIGHTS_CONNECTION_STRING
     }
   }
 
@@ -104,7 +106,7 @@ resource api 'Microsoft.Web/sites@2021-01-15' = {
 }
 
 resource appServicePlan 'Microsoft.Web/serverfarms@2021-03-01' = {
-  name: '${abbrs.webServerFarms}${resourceToken}'
+  name: 'plan-${resourceToken}'
   location: location
   tags: tags
   sku: {
@@ -113,7 +115,7 @@ resource appServicePlan 'Microsoft.Web/serverfarms@2021-03-01' = {
 }
 
 resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2020-03-01-preview' = {
-  name: '${abbrs.operationalInsightsWorkspaces}${resourceToken}'
+  name: 'log-${resourceToken}'
   location: location
   tags: tags
   properties: any({
@@ -127,8 +129,8 @@ resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2020-03
   })
 }
 
-module applicationInsightsResources 'applicationinsights.bicep' = {
-  name: 'applicationinsights-resources'
+module applicationInsightsResources './applicationinsights.bicep' = {
+  name: 'applicationinsights-${resourceToken}'
   params: {
     resourceToken: resourceToken
     location: location
@@ -138,7 +140,7 @@ module applicationInsightsResources 'applicationinsights.bicep' = {
 }
 
 resource cosmos 'Microsoft.DocumentDB/databaseAccounts@2021-10-15' = {
-  name: '${abbrs.documentDBDatabaseAccounts}${resourceToken}'
+  name: 'cosmos-${resourceToken}'
   location: location
   tags: tags
   properties: {
